@@ -1,0 +1,211 @@
+# For Bert
+import torch
+import pandas as pd
+from pytorch_pretrained_bert import BertTokenizer, BertForMaskedLM
+
+def get_candidate_scores(sentence, candidates, tokenizer, model):
+    tokenized_text = tokenizer.tokenize(sentence)
+    masked_index = tokenized_text.index("_")
+    tokenized_text[masked_index] = "[MASK]"
+
+    candidate_ids = []
+    for candidate in candidates:
+        if candidate in tokenizer.vocab:
+            candidate_ids.append(tokenizer.vocab[candidate])
+        else:
+            candidate_ids.append(tokenizer.vocab["[UNK]"])
+
+    indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
+    segments_ids = [0] * len(tokenized_text)
+
+    tokens_tensor = torch.tensor([indexed_tokens])
+    segments_tensors = torch.tensor([segments_ids])
+
+    with torch.no_grad():
+        predictions = model(tokens_tensor, segments_tensors)
+        predictions_candidates = predictions[0, masked_index, candidate_ids]
+
+    return predictions_candidates
+
+
+# Load the data from the XLSX file
+df = pd.read_excel("/content/drive/MyDrive/calculatings/Experiment1_SameSubject/SetUp/AllTenses.xlsx")
+
+# Initialize the tokenizer and the model
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertForMaskedLM.from_pretrained('bert-base-uncased')
+model.eval()
+
+# Create an empty data frame to store the results
+results = pd.DataFrame(columns=['Sentence', 'Candidate 1', 'Score 1', 'Candidate 2', 'Score 2'])
+
+# Loop over the rows in the data frame
+for i, row in df.iterrows():
+    sentence = row[0]
+    candidates = row[1:]
+    scores = get_candidate_scores(sentence, candidates, tokenizer, model)
+
+    if len(candidates) >= 2:
+        candidate_1, candidate_2 = candidates[:2]
+        score_1, score_2 = scores[:2]
+        results = results.append({'Sentence': sentence, 'Candidate 1': candidate_1, 'Score 1': score_1.item(), 'Candidate 2': candidate_2, 'Score 2': score_2.item()}, ignore_index=True)
+    elif len(candidates) == 1:
+        candidate_1 = candidates[0]
+        score_1 = scores[0]
+        results = results.append({'Sentence': sentence, 'Candidate 1': candidate_1, 'Score 1': score_1.item(), 'Candidate 2': None, 'Score 2': None}, ignore_index=True)
+    else:
+        results = results.append({'Sentence': sentence, 'Candidate 1': None, 'Score 1': None, 'Candidate 2': None, 'Score 2': None}, ignore_index=True)
+        
+ # Convert the results list to a data frame
+results_df = pd.DataFrame(results)
+
+# Save the results data frame to a CSV file in Google Drive
+results_df.to_csv("/content/drive/MyDrive/calculatings/Experiment1_SameSubject/Results/BERT/AllTensesB.csv", index=False)
+
+# Calculate the ratio of score 1 being higher than score 2
+num_higher = len(results[(results['Score 1'] > results['Score 2']) & (~results['Score 2'].isnull())])
+num_total = len(results[(~results['Score 1'].isnull()) & (~results['Score 2'].isnull())])
+ratio = num_higher / num_total
+
+print(f"Score 1 is higher than Score 2 in {ratio:.2%} of cases.")
+
+
+# For DeBERTa
+
+import pandas as pd
+import torch
+from transformers import DebertaTokenizer, DebertaForMaskedLM
+
+# Load the data from the Excel file
+df = pd.read_excel('/content/drive/MyDrive/calculatings/Experiment1_SameSubject/SetUp/AllTenses.xlsx', sheet_name='Sheet1')
+
+# Load the tokenizer and language model
+tokenizer = DebertaTokenizer.from_pretrained('microsoft/deberta-base')
+language_model = DebertaForMaskedLM.from_pretrained('microsoft/deberta-base')
+language_model.eval()
+
+# Initialize empty lists to store the results
+sentences = []
+candidate1_scores = []
+candidate2_scores = []
+
+# Loop through each row in the DataFrame
+for i, row in df.iterrows():
+    # Get the sentence and candidates from the row
+    sentence = row['Sentence']
+    candidate1 = row['Candidate 1']
+    candidate2 = row['Candidate 2']
+
+    # Tokenize the sentence and get the index of the [MASK] token
+    tokenized_text = tokenizer.tokenize(sentence)
+    masked_index = tokenized_text.index('[MASK]')
+
+    # Convert the candidates to token IDs
+    candidates = [candidate1, candidate2]
+    candidate_ids = tokenizer.convert_tokens_to_ids(candidates)
+
+    # Convert the tokenized sentence to token IDs and create an attention mask
+    indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
+    tokens_tensor = torch.tensor([indexed_tokens])
+    attention_mask = torch.ones_like(tokens_tensor)
+
+    # Get the predictions from the language model
+    with torch.no_grad():
+        predictions = language_model(tokens_tensor, attention_mask=attention_mask)
+        logits = predictions[0]
+        predictions_candidates = logits[0, masked_index, candidate_ids]
+        scores = torch.softmax(predictions_candidates, dim=-1).tolist()
+
+    # Add the results to the lists
+    sentences.append(sentence)
+    candidate1_scores.append(scores[0])
+    candidate2_scores.append(scores[1])
+
+# Create a new DataFrame with the results
+results_df1 = pd.DataFrame({
+    'Sentence': sentences,
+    'Candidate 1': df['Candidate 1'],
+    'Score for Candidate 1': candidate1_scores,
+    'Candidate 2': df['Candidate 2'],
+    'Score for Candidate 2': candidate2_scores,
+})
+
+# Save the results to a CSV file
+results_df.to_csv('/content/drive/MyDrive/calculatings/Experiment1_SameSubject/Results/BERT/AllTenses1.csv.', index=False)
+
+
+
+# Calculate the ratio of score 1 being higher than score 2
+num_higher = len(results_df1[(results_df1['Score for Candidate 1'] > results_df1['Score for Candidate 2']) & (~results_df1['Score for Candidate 2'].isnull())])
+num_total = len(results_df1[(~results_df1['Score for Candidate 1'].isnull()) & (~results_df1['Score for Candidate 2'].isnull())])
+ratio = num_higher / num_total
+
+print(f"Score 1 is higher than Score 2 in {ratio:.2%} of cases.")
+
+
+#For RoBERTa
+
+import torch
+import pandas as pd
+from transformers import RobertaTokenizer, RobertaForMaskedLM
+
+# Load the XLSX file into a Pandas DataFrame
+df = pd.read_excel('/content/drive/MyDrive/Thesis_NLP/experiment1_sameSubject/setup/SS_FutureTenses_copy_mask.xlsx')
+
+# Load the RoBERTa tokenizer and model from pre-trained versions
+tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+model = RobertaForMaskedLM.from_pretrained('roberta-base')
+model.eval()
+
+# Define the candidate column names
+candidate_col1 = 'Candidate 1'
+candidate_col2 = 'Candidate 2'
+
+# Create an empty list to store the results and the comparison count
+results = []
+comparison_count = 0
+
+# Loop over each row in the DataFrame and perform the masked language modeling task
+for index, row in df.iterrows():
+    # Get the input sentence and the candidate words from the current row
+    sentence = row['Sentence']
+    candidate1 = row[candidate_col1]
+    candidate2 = row[candidate_col2]
+
+    # Tokenize the input sentence and get the index of the masked token
+    tokenized_text = tokenizer.tokenize(sentence)
+    masked_index = tokenized_text.index('<mask>')
+
+    # Convert the candidate words to token IDs
+    candidate_tokens = tokenizer.convert_tokens_to_ids([candidate1, candidate2])
+
+    # Convert the tokenized sentence to token IDs and wrap in tensors
+    indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
+    tokens_tensor = torch.tensor([indexed_tokens])
+    attention_mask = torch.tensor([[1] * len(indexed_tokens)])
+
+    # Use the model to predict the probability of each candidate word
+    with torch.no_grad():
+        predictions = model(tokens_tensor, attention_mask=attention_mask)
+    predicted_probabilities = predictions[0][0, masked_index, candidate_tokens]
+
+    # Compare the scores for the two candidate words
+    if predicted_probabilities[0] > predicted_probabilities[1]:
+        comparison_count += 1
+
+    # Add the results to the list
+    result = [sentence, candidate1, predicted_probabilities[0], candidate2, predicted_probabilities[1]]
+    results.append(result)
+
+# Compute the ratio of cases where Candidate 1 has a higher score
+ratio = comparison_count / len(df)
+
+# Create a DataFrame from the results list and save it to a CSV file
+columns = ['Sentence', 'Candidate 1', 'Score for Candidate 1', 'Candidate 2', 'Score for Candidate 2']
+results_df = pd.DataFrame(results, columns=columns)
+results_df.to_csv('/content/drive/MyDrive/Thesis_NLP/experiment1_sameSubject/setup/SS_FutureTenses_copy_mask_score.csv', index=False)
+
+# Print the results
+print(f'The number of cases where Candidate 1 has a higher score: {comparison_count}')
+print(f'The ratio of cases where Candidate 1 has a higher score: {ratio:.4f}')
+
