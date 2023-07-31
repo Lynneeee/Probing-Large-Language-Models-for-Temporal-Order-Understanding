@@ -1,0 +1,50 @@
+import pandas as pd
+
+# read in the XLSX file
+df1 = pd.read_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/DifferentSubject_WithoutMixture.xlsx')
+
+# replace all occurrences of "" with an empty string
+df1 = df1.replace('"', '', regex=True)
+
+# write the updated data to a new XLSX file
+df1.to_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/DifferentSubject_WithoutMixture.xlsx', index=False)
+
+
+import pandas as pd
+
+# read in the XLSX file
+df3 = pd.read_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/DifferentSubject_WithoutMixture.xlsx')
+
+# convert all capitalized letters to lower case in all columns
+df3 = df3.applymap(lambda s: s.lower() if type(s) == str else s)
+
+# write the updated data to a new XLSX file
+df3.to_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/DifferentSubject_WithoutMixture.xlsx', index=False)
+
+import pandas as pd
+
+# read in the XLSX file
+df4 = pd.read_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/SameSubject_WithoutMixture.xlsx')
+
+# convert all capitalized letters to lower case in all columns
+df4 = df4.applymap(lambda s: s.lower() if type(s) == str else s)
+
+# write the updated data to a new XLSX file
+df4.to_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/SameSubject_WithoutMixture.xlsx', index=False)
+
+import pandas as pd
+
+# read in the XLSX file
+df5 = pd.read_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/DifferentSubject_WithoutMixture.xlsx')
+
+# split the third column into two sub-sentences using 'and' as the separator
+df5[['subsentence1', 'subsentence2']] = df5['sentence'].str.split(' and ', expand=True)
+
+# swap the order of the sub-sentences
+df5['sentence'] = df5['subsentence2'] + ' and ' + df5['subsentence1']
+
+# drop the original 'subsentence' columns
+df5 = df5.drop(columns=['subsentence1', 'subsentence2'])
+
+# write the updated data to a new XLSX file
+df5.to_excel('/content/drive/MyDrive/Thesis_NLP/experiment4_semanticOrder/SetUp/DifferentSubject_Mixture.xlsx', index=False)
